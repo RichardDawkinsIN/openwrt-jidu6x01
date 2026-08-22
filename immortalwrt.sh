@@ -121,14 +121,12 @@ cat > files/etc/uci-defaults/99-custom-config <<'EOF'
 exec >/tmp/setup.log 2>&1
 
 # 2.4GHz + 5GHz WiFi ON (no password, same SSID)
-if [ -n "$wlan_name" ]; then
   uci set wireless.@wifi-device[0].disabled='0'
   uci set wireless.@wifi-iface[0].disabled='0'
   uci set wireless.@wifi-device[1].disabled='0'
   uci set wireless.@wifi-iface[1].disabled='0'
   uci commit wireless
   wifi reload
-fi
 
 # Custom LED script
 cat > /usr/bin/led-wan << 'LEDEOF'
