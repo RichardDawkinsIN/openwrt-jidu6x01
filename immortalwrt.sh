@@ -20,9 +20,21 @@ git config --global user.name "CI Builder"
 git fetch https://github.com/openwrt/openwrt.git pull/23510/head:pr-23510
 
 # Get only Jio-related commits and cherry-pick them dynamically
-git log pr-23510 --oneline --grep="jio\|jidu" --regexp-ignore-case --format="%H"| tac | \
-  grep -v $(git log --format="%H" | head -100 | tr '\n' '\|' | sed 's/|$//') | \
-  xargs git cherry-pick -X theirs
+# (Some commits, e.g. JIDU6101 support, are already merged into mainline OpenWrt.
+#  We try each commit individually and skip ones that are already applied or conflict,
+#  instead of failing the whole build.)
+JIO_COMMITS=$(git log pr-23510 --oneline --grep="jio\|jidu" --regexp-ignore-case --format="%H" | tac | \
+  grep -v $(git log --format="%H" | head -100 | tr '\n' '\|' | sed 's/|$//'))
+
+for commit in $JIO_COMMITS; do
+  echo "Attempting to cherry-pick $commit"
+  if git cherry-pick -X theirs "$commit"; then
+    echo "  -> applied $commit"
+  else
+    echo "  -> skipping $commit (already applied or conflict)"
+    git cherry-pick --abort 2>/dev/null || git cherry-pick --skip 2>/dev/null || true
+  fi
+done
 
 echo "==============================adding initramfs-factory.ubi artifact to JIDU6101 and JIDU6J01=============================="
 # Add initramfs-factory.ubi artifact to JIDU6101 and JIDU6J01
@@ -237,8 +249,6 @@ EOF
 
 # Inject the correct model name for this specific device build
 sed -i "s|__MODEL_NAME__|${MODEL_NAME}|" files/etc/uci-defaults/99-custom-config
-chmod +x files/etc/uci-defaults/99-custom-config
-
 chmod +x files/etc/uci-defaults/99-custom-config
 echo "==============================finished adding custom uci-defaults script=============================="
 
