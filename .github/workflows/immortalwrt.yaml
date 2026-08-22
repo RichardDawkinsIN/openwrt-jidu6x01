@@ -1,0 +1,98 @@
+name: Immortal Build for JIDU6101 and JIDU6J01
+
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *" # At 02:00 AM
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        device:
+          - name: jidu6101
+            config: configs/.config-jidu6101
+          - name: jidu6101-mesh
+            config: configs/.config-jidu6101-mesh
+
+          - name: jidu6j01 # jidu6201/6401/6601/6701
+            config: configs/.config-jidu6j01
+          - name: jidu6j01-mesh # jidu6201/6401/6601/6701
+            config: configs/.config-jidu6j01-mesh
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Do Build
+      env:
+        DEVICE_CONFIG: ${{ matrix.device.config }}
+      run: chmod +x immortalwrt.sh; bash immortalwrt.sh
+
+    - name: Build Summary
+      if: always()
+      run: |
+        cd immortalwrt
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  🖥️  Runner Info"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  OS      : $(lsb_release -ds)"
+        echo "  CPU     : $(nproc) cores"
+        echo "  RAM     : $(free -h | awk '/^Mem/{print $2}') total / $(free -h | awk '/^Mem/{print $7}') available"
+        echo "  Disk    : $(df -h . | awk 'NR==2{print $4}') free of $(df -h . | awk 'NR==2{print $2}')"
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  🎯 Build Target"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Target  : $(grep 'CONFIG_TARGET_BOARD' .config | cut -d= -f2 | tr -d '\"')"
+        echo "  Subtarget: $(grep 'CONFIG_TARGET_SUBTARGET' .config | cut -d= -f2 | tr -d '\"')"
+        echo "  Profile : $(grep 'CONFIG_TARGET_PROFILE' .config | cut -d= -f2 | tr -d '\"')"
+        echo "  Kernel  : $(grep 'CONFIG_LINUX_' .config | grep '=y' | cut -d_ -f3- | tr -d '='| tr -d 'y' | sed 's/_/./g')"
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  📜 Git Commits (last 5)"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        git log --oneline -5
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  📦 Build Artifacts"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        tree -L 1 bin/targets/mediatek/filogic/
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  📏 Image Sizes"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        ls -lh bin/targets/mediatek/filogic/*.bin 2>/dev/null | awk '{print "  " $5 "  " $9}'
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  📦 Selected Packages Count"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Total   : $(grep '^CONFIG_PACKAGE_.*=y' .config | wc -l) packages"
+
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  🌐 Feeds"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        cat feeds.conf.default
+
+        echo ""
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: immortalwrt-${{ matrix.device.name }}
+        path: |
+          immortalwrt/bin/targets/mediatek/filogic/immortalwrt*.bin
+          immortalwrt/bin/targets/mediatek/filogic/immortalwrt*.ubi
+          immortalwrt/bin/targets/mediatek/filogic/sha256sums
